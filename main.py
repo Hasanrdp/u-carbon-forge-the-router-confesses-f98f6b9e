@@ -26,27 +26,38 @@ def output_path() -> str:
     return os.path.join(base, "entry.txt")
 
 
-def verify(path: str) -> None:
+def verify(path: str, data: bytes) -> bool:
+    """Read the file back and verify its bytes against the intended data.
+
+    Returns True only when the bytes on disk are byte-for-byte identical to
+    `data` and match the pinned size and SHA-256; raises SystemExit on any
+    mismatch.
+    """
     with open(path, "rb") as fh:
-        data = fh.read()
-    text = data.decode("utf-8")
+        read = fh.read()
+    if read != data:
+        raise SystemExit("verify: bytes on disk differ from the bytes written")
+    text = read.decode("utf-8")
     if len(text) != EXPECTED_CHARS:
         raise SystemExit(f"verify: {len(text)} chars, expected {EXPECTED_CHARS}")
-    if len(data) != EXPECTED_BYTES:
-        raise SystemExit(f"verify: {len(data)} bytes, expected {EXPECTED_BYTES}")
-    digest = hashlib.sha256(data).hexdigest()
+    if len(read) != EXPECTED_BYTES:
+        raise SystemExit(f"verify: {len(read)} bytes, expected {EXPECTED_BYTES}")
+    digest = hashlib.sha256(read).hexdigest()
     if digest != EXPECTED_SHA256:
         raise SystemExit(f"verify: sha256 {digest}, expected {EXPECTED_SHA256}")
     if text != LINE:
         raise SystemExit("verify: text does not match the pinned line")
+    return True
 
 
 def main() -> int:
     path = output_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8", newline="") as fh:
-        fh.write(LINE)
-    verify(path)
+    data = LINE.encode("utf-8")
+    with open(path, "wb") as fh:
+        fh.write(data)
+    if not verify(path, data):
+        raise SystemExit("verify: read-back failed")
     print(f"wrote {path}: {EXPECTED_BYTES} bytes, sha256 {EXPECTED_SHA256}")
     return 0
 
